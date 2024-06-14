@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Fee collection backend",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "format": "prettier --write \"src/**/*.js\"",
     "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js"
@@ -10,6 +11,13 @@
   "author": "Shrijan",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.19.2"
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-async-handler": "^1.2.0",
+    "mongoose": "^8.4.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.3"
   }
 }
