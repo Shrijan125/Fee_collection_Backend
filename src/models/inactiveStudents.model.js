@@ -4,7 +4,6 @@ const studentSchema = new Schema({
   admno: {
     type: String,
     required: true,
-    unique: true,
   },
   firstName: {
     type: String,
@@ -43,27 +42,6 @@ const studentSchema = new Schema({
     type: String,
     minlength: 10,
   },
-  dues: {
-    type: ["Boolean"],
-    default: [
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-    ],
-  },
-  description: {
-    type: String,
-    default: "",
-  },
 });
 
-export const Student = mongoose.model("Student", studentSchema);
+export const InactiveStudent = mongoose.model("InactiveStudent", studentSchema);

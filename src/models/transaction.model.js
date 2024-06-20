@@ -11,9 +11,9 @@ const transactionSchema = new Schema(
       ref: "Student",
       required: true,
     },
-    utrNo:{
-      type:'String'
-    }
+    utrNo: {
+      type: "String",
+    },
   },
   {
     timestamps: true,
