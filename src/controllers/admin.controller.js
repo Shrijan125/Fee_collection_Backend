@@ -35,17 +35,39 @@ const Login = asyncHandler(async (req, res) => {
 
 const AddStudent = asyncHandler(async (req, res) => {
   const {
-    firstName,
+    Name,
     admno,
-    lastName,
-    middleName,
+    DOB,
     grade,
     phone,
+    fathersName,
+    mothersName,
+    hostelFacility,
+    TransportFacility,
+    feeWaiver,
+    Aadhar,
+    Address,
+    Gender,
+    bloodGroup,
     alternatePhone,
   } = req.body;
-  if (!firstName || !admno || !grade || !phone) {
+  const x=req.body;
+  if (
+    !String(bloodGroup).trim() ||
+    !String(Name).trim() ||
+    !String(admno).trim() ||
+    !String(grade).trim() ||
+    !String(phone).trim() ||
+    !String(DOB).trim() ||
+    !String(fathersName).trim() ||
+    !String(mothersName).trim() ||
+    !String(Aadhar).trim() ||
+    !String(Address).trim() ||
+    !String(Gender).trim()
+  ) {
     throw new ApiError(404, "Please fill the required fields");
   }
+
   const studentExists = await Student.findOne({ admno });
   if (studentExists) {
     throw new ApiError(409, "Student with that admno already exists");
@@ -56,13 +78,21 @@ const AddStudent = asyncHandler(async (req, res) => {
     throw new ApiError(409, "Student with that admno already exists");
   }
   const createStudent = await Student.create({
-    firstName,
+    Name,
     admno,
-    lastName,
-    middleName,
+    DOB,
     grade,
+    bloodGroup,
     phone,
-    alternatePhone,
+    fathersName,
+    mothersName,
+    hostelFacility,
+    TransportFacility,
+    feeWaiver,
+    Aadhar,
+    Address,
+    Gender,
+    alternatePhone
   });
   if (createStudent) {
     return res
@@ -84,8 +114,10 @@ const getFeeStructure = asyncHandler(async (req, res) => {
 });
 
 const updateFee=asyncHandler(async(req,res)=>{
-    const {grade,month,amount}=req.body;
-    const findGrade=await Fee.findOneAndUpdate({grade},{$set:{[`amount.${month}`]:amount}},{new:true});
+    const {grade,ProsReg,AdmFee,AnnualCharge,TuitionFee,LabCharge,TotalFee,StationaryFee,ExamFee}=req.body;
+    if(!grade || !ProsReg || !AdmFee || !AnnualCharge || !TuitionFee || !LabCharge || !TotalFee || !StationaryFee || !ExamFee)
+    throw new ApiError(409,"All Fields are required");
+    const findGrade=await Fee.findOneAndUpdate({grade},{$set:{ProsReg,AdmFee,AnnualCharge,TuitionFee,LabCharge,TotalFee,StationaryFee,ExamFee}});
     if(!findGrade)
       throw new ApiError(404,"Failed to Update");
     return res.status(200).json(new ApiResponse(200,{},'Updated Successfully!'));
