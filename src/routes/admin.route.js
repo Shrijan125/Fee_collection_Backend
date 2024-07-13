@@ -13,6 +13,8 @@ import {
   getTodaysCollection,
   updateFee,
   updateStudent,
+  getFeeDetails,
+  addBulkStudent
 } from "../controllers/admin.controller.js";
 
 const router = Router();
@@ -30,5 +32,6 @@ router.route("/getallstudent").get(getAllStudent);
 router.route("/updateStudent").put(updateStudent);
 router.route("/generateDues").get(generateDues);
 router.route("/generateCollection").get(getCollection);
-
+router.route("/getFeeDetails").get(getFeeDetails);
+router.route("/addBulkStudent").post(addBulkStudent);
 export default router;

@@ -6,6 +6,39 @@ import { Student } from "../models/student.model.js";
 import { Fee } from "../models/fee.model.js";
 import { Transaction } from "../models/transaction.model.js";
 import { InactiveStudent } from "../models/inactiveStudents.model.js";
+import { StuFeeModel } from "../models/stuFee.model.js";
+import { Receipt } from "../models/receipt.model.js";
+import mongoose from "mongoose";
+
+const excelDateToJSDate = (serial) => {
+  const date = new Date((serial - 25569) * 86400 * 1000);
+  const dateStr = date.toISOString().split('T')[0];
+  return dateStr;
+};
+
+
+
+const transformKeys = (data) => {
+  return data.map(item => ({
+    Name: item?.Name,
+    admno: item?.Admno,
+    DOB: new Date(excelDateToJSDate(item.DOB)),
+    section: item?.Section,
+    grade: item?.Class,
+    bloodGroup: item['Blood Group'],
+    phone: item['Phone Number'],
+    fathersName: item["Father's Name"],
+    mothersName: item["Mother's Name"],
+    hostelFacility: item['Hostel Facility'] || false,
+    TransportFacility: item['Transport Facility'] || false,
+    feeWaiver: item['Fee Waiver'] || false,
+    Aadhar: item?.Aadhar,
+    Address: item?.Address,
+    Gender: item?.Gender,
+    alternatePhone: item?.AlternatePhone || null
+  }));
+};
+
 
 const Login = asyncHandler(async (req, res) => {
   const { adminId, password } = req.body;
@@ -41,6 +74,7 @@ const AddStudent = asyncHandler(async (req, res) => {
     grade,
     phone,
     fathersName,
+    section,
     mothersName,
     hostelFacility,
     TransportFacility,
@@ -51,7 +85,6 @@ const AddStudent = asyncHandler(async (req, res) => {
     bloodGroup,
     alternatePhone,
   } = req.body;
-  const x=req.body;
   if (
     !String(bloodGroup).trim() ||
     !String(Name).trim() ||
@@ -63,45 +96,71 @@ const AddStudent = asyncHandler(async (req, res) => {
     !String(mothersName).trim() ||
     !String(Aadhar).trim() ||
     !String(Address).trim() ||
-    !String(Gender).trim()
+    !String(Gender).trim() ||
+    !String(section).trim()
   ) {
     throw new ApiError(404, "Please fill the required fields");
   }
-
-  const studentExists = await Student.findOne({ admno });
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  const studentExists = await Student.findOne({ admno }).session(session);
   if (studentExists) {
+    await session.abortTransaction();
+     session.endSession();
     throw new ApiError(409, "Student with that admno already exists");
   }
 
-  const inactiveStudent=await InactiveStudent.findOne({admno});
+  const inactiveStudent = await InactiveStudent.findOne({ admno }).session(session);
   if (inactiveStudent) {
+    await session.abortTransaction();
+     session.endSession();
     throw new ApiError(409, "Student with that admno already exists");
   }
-  const createStudent = await Student.create({
-    Name,
-    admno,
-    DOB,
-    grade,
-    bloodGroup,
-    phone,
-    fathersName,
-    mothersName,
-    hostelFacility,
-    TransportFacility,
-    feeWaiver,
-    Aadhar,
-    Address,
-    Gender,
-    alternatePhone
-  });
-  if (createStudent) {
+  const createStudent = await Student.create(
+    [{
+      Name,
+      admno,
+      DOB,
+      section,
+      grade,
+      bloodGroup,
+      phone,
+      fathersName,
+      mothersName,
+      hostelFacility,
+      TransportFacility,
+      feeWaiver,
+      Aadhar,
+      Address,
+      Gender,
+      alternatePhone,
+    }],
+    { session }
+  );
+  const createFeeDetails = await StuFeeModel.create(
+    [{ student: createStudent[0]._id }],
+    { session }
+  );
+  if (!createFeeDetails) {
+    await session.abortTransaction();
+    session.endSession();
+    throw new ApiError(400, "Failed to create student")
+  };
+  if (createStudent && createFeeDetails) {
+    await session.commitTransaction();
+    session.endSession();
     return res
       .status(200)
       .json(
         new ApiResponse(200, { createStudent }, "Student created successfully")
       );
   }
-  throw new ApiError(400, "Failed to create Student");
+  else
+  {
+    await session.abortTransaction();
+    session.endSession();
+    throw new ApiError(400, "Failed to create Student");
+  }
 });
 
 const getFeeStructure = asyncHandler(async (req, res) => {
@@ -113,44 +172,78 @@ const getFeeStructure = asyncHandler(async (req, res) => {
   throw new ApiError(404, "Failed to Fetch fee Structure");
 });
 
-const updateFee=asyncHandler(async(req,res)=>{
-    const {grade,ProsReg,AdmFee,AnnualCharge,TuitionFee,LabCharge,TotalFee,StationaryFee,ExamFee}=req.body;
-    if(!grade || !ProsReg || !AdmFee || !AnnualCharge || !TuitionFee || !LabCharge || !TotalFee || !StationaryFee || !ExamFee)
-    throw new ApiError(409,"All Fields are required");
-    const findGrade=await Fee.findOneAndUpdate({grade},{$set:{ProsReg,AdmFee,AnnualCharge,TuitionFee,LabCharge,TotalFee,StationaryFee,ExamFee}});
-    if(!findGrade)
-      throw new ApiError(404,"Failed to Update");
-    return res.status(200).json(new ApiResponse(200,{},'Updated Successfully!'));
+const updateFee = asyncHandler(async (req, res) => {
+  const {
+    grade,
+    ProsReg,
+    AdmFee,
+    AnnualCharge,
+    TuitionFee,
+    LabCharge,
+    TotalFee,
+    StationaryFee,
+    ExamFee,
+  } = req.body;
+  if (
+    !grade ||
+    !ProsReg ||
+    !AdmFee ||
+    !AnnualCharge ||
+    !TuitionFee ||
+    !LabCharge ||
+    !TotalFee ||
+    !StationaryFee ||
+    !ExamFee
+  )
+    throw new ApiError(409, "All Fields are required");
+  const findGrade = await Fee.findOneAndUpdate(
+    { grade },
+    {
+      $set: {
+        ProsReg,
+        AdmFee,
+        AnnualCharge,
+        TuitionFee,
+        LabCharge,
+        TotalFee,
+        StationaryFee,
+        ExamFee,
+      },
+    }
+  );
+  if (!findGrade) throw new ApiError(404, "Failed to Update");
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Updated Successfully!"));
 });
 
-
-const getStudent=asyncHandler(async(req,res)=>
-{
-  const admno=req.query.admno;
-  if(admno==null || admno.length==0)
-  throw new ApiError(404,'Please provide the admission number');
-  const studentExists=await Student.findOne({admno});
-  if(studentExists)
-  return res.status(200).json(new ApiResponse(200,studentExists,'Student fetched Successfully'));
-  throw new ApiError(404,'Student not Found');
+const getStudent = asyncHandler(async (req, res) => {
+  const admno = req.query.admno;
+  if (admno == null || admno.length == 0)
+    throw new ApiError(404, "Please provide the admission number");
+  const studentExists = await Student.findOne({ admno });
+  if (studentExists)
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, studentExists, "Student fetched Successfully")
+      );
+  throw new ApiError(404, "Student not Found");
 });
 
 const collectFee = asyncHandler(async (req, res) => {
   const { admno, month, amount } = req.body;
-  var { description , utrNo}=req.body;
+  var { description, utrNo } = req.body;
 
-  
-  if (!admno || !month || !amount || month.length===0) {
-    throw new ApiError(400, 'Please provide the mandatory fields');
+  if (!admno || !month || !amount || month.length === 0) {
+    throw new ApiError(400, "Please provide the mandatory fields");
   }
 
-  if(!description)
-  {
-    description='';
+  if (!description) {
+    description = "";
   }
-  if(!utrNo)
-  {
-    utrNo='';
+  if (!utrNo) {
+    utrNo = "";
   }
   const updateFields = {
     description,
@@ -159,66 +252,100 @@ const collectFee = asyncHandler(async (req, res) => {
 
   const updateFee = await Student.findOneAndUpdate(
     { admno },
-    { 
+    {
       $set: updateFields,
     },
     { new: true }
   );
 
   if (!updateFee) {
-    throw new ApiError(400, 'Failed to collect fee');
+    throw new ApiError(400, "Failed to collect fee");
   }
 
   const createTransaction = await Transaction.create({
     student: updateFee._id,
     amount: amount,
-    utrNo
+    utrNo,
   });
 
   if (!createTransaction) {
-    throw new ApiError(409, 'Failed to create transaction');
+    throw new ApiError(409, "Failed to create transaction");
   }
 
   return res.status(200).json(new ApiResponse(createTransaction));
 });
 
-const calculateFee=asyncHandler(async(req,res)=>{
-  const months=req.query.months;
-  const grade=req.query.grade;
-  const currentDate=new Date();
-  const currentMonth=currentDate.getMonth();
-  if(!months || months.length===0  || !grade || grade.length===0)
-    throw new ApiError(400,"Please provide the month and the grade");
-  const getFee=await Fee.findOne({grade});
-  if(!getFee)
-    throw new ApiError(404,'Failed to fetch fee');
-  var totalFee=0;
-  var fine=0;
-  if(typeof months === 'string')
-  {
-    if(parseInt(months) - currentMonth <= -2)
-      fine=fine+100;
-    if(parseInt(months)-currentMonth===-1)
-      fine=fine+50;
-    totalFee=totalFee+parseInt(getFee.amount[parseInt(months)]);
+const addBulkStudent = asyncHandler(async (req, res) => {
+  const data = req.body;
+  if (!data || data.length === 0) {
+    throw new ApiError(404, "Can't find any data.");
   }
-  else
-  {
-  for(var i=0;i<months.length;i++)
-  {
-  
-    if(parseInt(months[i]) - currentMonth <= -2)
-      fine=fine+100;
-    if(parseInt(months[i])-currentMonth===-1)
-      fine=fine+50;
-    totalFee=totalFee+parseInt(getFee.amount[parseInt(months[i])]);
+
+  const dataToInsert = transformKeys(data);
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const insertedStudents = await Student.insertMany(dataToInsert, { session });
+    
+    const feeDetailsPromises = insertedStudents.map(student => 
+      StuFeeModel.create([{ student: student?._id}], { session })
+    );
+
+    await Promise.all(feeDetailsPromises);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json(new ApiResponse(200, {}, "Successful"));
+  } catch (error) {
+    console.log(error);
+    await session.abortTransaction();
+    session.endSession();
+    throw new ApiError(500, "Failed to insert students");
   }
-}
-  totalFee=totalFee+fine;
-  return res.status(200).json(new ApiResponse(200,{totalFee,fine},"Fee calculated Successfully!"));
 });
 
-const getTodaysCollection=asyncHandler(async(req,res)=>{
+const calculateFee = asyncHandler(async (req, res) => {
+  const months = req.query.months;
+  const tutFee = req.query.tutfee;
+  const currentDate = new Date();
+  const currentDay = currentDate.getDate();
+  const currentMonth = currentDate.getMonth();
+  if (!months || months.length === 0 || !tutFee || tutFee.length === 0)
+    throw new ApiError(400, "Please provide the month and the tutFee");
+  var totalFee = 0;
+  var fine = 0;
+  if (typeof months === "string") {
+    const monthsPassed = currentMonth - parseInt(months);
+    const daysPassed = currentDay - 10;
+    if (monthsPassed > 0) {
+      fine = fine + monthsPassed * 50;
+    }
+    if (monthsPassed>=0 && daysPassed > 0) {
+      fine += 50;
+    }
+    totalFee = parseInt(tutFee) + fine;
+  } 
+  else {
+    const daysPassed = currentDay - 10;
+    var monthsPassed = 0;
+    for (var i = 0; i < months.length; i++) {
+      monthsPassed = currentMonth - parseInt(months[i]);
+      if (monthsPassed > 0) {
+        fine = fine + monthsPassed * 50;
+      }
+      if (monthsPassed>=0 && daysPassed > 0) {
+        fine += 50;
+      }
+    }
+    totalFee = parseInt(tutFee) * months.length+fine;
+  }
+  return res.status(200).json(new ApiResponse(200,{totalFee,fine},"Fee calculation Suucessful"));
+});
+
+const getTodaysCollection = asyncHandler(async (req, res) => {
   const today = new Date();
   const startOfDay = new Date(today.setHours(0, 0, 0, 0));
   const endOfDay = new Date(today.setHours(23, 59, 59, 999));
@@ -228,58 +355,76 @@ const getTodaysCollection=asyncHandler(async(req,res)=>{
       $gte: startOfDay,
       $lt: endOfDay,
     },
-  }).populate('student',"-dues");
-  
-  if(todaysTransactions)
-    return res.status(200).json(new ApiResponse(200,todaysTransactions,'Fetched transactions successfully!'));
-    throw new ApiError(400,'Failed to generate transaction');
+  }).populate("student", "-dues");
+
+  if (todaysTransactions)
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          todaysTransactions,
+          "Fetched transactions successfully!"
+        )
+      );
+  throw new ApiError(400, "Failed to generate transaction");
 });
 
-const deleteStudent=asyncHandler(async(req,res)=>{
-  const {admno}=req.body;
-  if(!admno)
-    throw new ApiError(400,'Admission Number is requried');
-  const studentExists=await Student.findOne({admno});
-  if(!studentExists)
-    throw new ApiError(404,"Student Not Found");
- 
-  const inactivateStudent=await InactiveStudent.create({
-    admno:studentExists.admno,
-    firstName:studentExists.firstName,
-    middleName:studentExists.middleName,
-    lastName:studentExists.lastName,
-    grade:studentExists.grade,
-    phone:studentExists.phone,
-    alternatePhone:studentExists.alternatePhone
-  });
-  if(!inactivateStudent)
-    throw new ApiError(409,'Failed to inactivateStudent!');
+const deleteStudent = asyncHandler(async (req, res) => {
+  const { admno } = req.body;
+  if (!admno) throw new ApiError(400, "Admission Number is requried");
+  const studentExists = await Student.findOne({ admno });
+  if (!studentExists) throw new ApiError(404, "Student Not Found");
 
-  const deleteStudent=await Student.findByIdAndDelete(studentExists._id);
-  if(!deleteStudent)
-    throw new ApiError(400,'Failed to delete Student');
-  return res.status(200).json(new ApiResponse(200,inactivateStudent,"Student Inactivated Successfully"));
+  const inactivateStudent = await InactiveStudent.create({
+    admno: studentExists.admno,
+    firstName: studentExists.firstName,
+    middleName: studentExists.middleName,
+    lastName: studentExists.lastName,
+    grade: studentExists.grade,
+    phone: studentExists.phone,
+    alternatePhone: studentExists.alternatePhone,
+  });
+  if (!inactivateStudent)
+    throw new ApiError(409, "Failed to inactivateStudent!");
+
+  const deleteStudent = await Student.findByIdAndDelete(studentExists._id);
+  if (!deleteStudent) throw new ApiError(400, "Failed to delete Student");
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        inactivateStudent,
+        "Student Inactivated Successfully"
+      )
+    );
 });
 
-const getAllStudent=asyncHandler(async(req,res)=>
-  {
-    const admno=req.query.admno;
-    var present;
-    if(admno==null || admno.length==0)
-    throw new ApiError(404,'Please provide the admission number');
-    var studentExists=await Student.findOne({admno});
-    present=true
-    if(!studentExists)
-    {
-      studentExists=await  InactiveStudent.findOne({admno});
-      present=false
-    }
-    if(!studentExists)
-      throw new ApiError(404,'Student Not Found');
-    return res.status(200).json(new ApiResponse(200,{present,studentExists},'Student fetched Successfully'));
-  });
-  
-const updateStudent=asyncHandler(async(req,res)=>{
+const getAllStudent = asyncHandler(async (req, res) => {
+  const admno = req.query.admno;
+  var present;
+  if (admno == null || admno.length == 0)
+    throw new ApiError(404, "Please provide the admission number");
+  var studentExists = await Student.findOne({ admno });
+  present = true;
+  if (!studentExists) {
+    studentExists = await InactiveStudent.findOne({ admno });
+    present = false;
+  }
+  if (!studentExists) throw new ApiError(404, "Student Not Found");
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { present, studentExists },
+        "Student fetched Successfully"
+      )
+    );
+});
+
+const updateStudent = asyncHandler(async (req, res) => {
   const {
     firstName,
     admno,
@@ -296,69 +441,141 @@ const updateStudent=asyncHandler(async(req,res)=>{
   if (!studentExists) {
     throw new ApiError(409, "Student with that admno does not exists");
   }
-  const updateObj={firstName,admno,lastName,middleName,grade,phone,alternatePhone};
-  const updatedStudent= await Student.findByIdAndUpdate(studentExists._id,updateObj,{new:true});
-  if(!updatedStudent)
-    throw new ApiError(400,'Failed to update Student');
+  const updateObj = {
+    firstName,
+    admno,
+    lastName,
+    middleName,
+    grade,
+    phone,
+    alternatePhone,
+  };
+  const updatedStudent = await Student.findByIdAndUpdate(
+    studentExists._id,
+    updateObj,
+    { new: true }
+  );
+  if (!updatedStudent) throw new ApiError(400, "Failed to update Student");
   return res.status(200).json(updatedStudent);
 });
 
-const generateDues=asyncHandler(async(req,res)=>{
-  const start=req.query.startDate;
-  var end=req.query.endDate || '';
-  var grade=req.query.grade || '';
+const generateDues = asyncHandler(async (req, res) => {
+  const start = req.query.startDate;
+  var end = req.query.endDate || "";
+  var grade = req.query.grade || "";
 
+  if (!start) throw new ApiError(404, "Starting month is required");
 
-  if(!start)
-  throw new ApiError(404,'Starting month is required');
+  const query = grade === "" ? {} : { grade };
+  const data = await Student.find(query);
+  const dues = await Promise.all(
+    data.map(async (student) => {
+      const duesUptoIndex =
+        end === ""
+          ? student.dues.slice(0, parseInt(start) + 1)
+          : student.dues.slice(parseInt(start), parseInt(end) + 1);
+      let dueAmount = 0;
+      await Promise.all(
+        duesUptoIndex.map(async (due, index) => {
+          if (due === true) {
+            const feeData = await Fee.find({ grade: student.grade }).select(
+              "amount"
+            );
 
-  const query=grade===''?{}:{grade};
-  const data=await Student.find(query);
-  const dues = await Promise.all(data.map(async (student) => {
-    const duesUptoIndex = end==='' ? student.dues.slice(0, parseInt(start) + 1) : student.dues.slice(parseInt(start),parseInt(end)+1);
-    let dueAmount = 0;
-    await Promise.all(duesUptoIndex.map(async (due, index) => {
-      if (due === true) {
-        const feeData = await Fee.find({ grade: student.grade }).select("amount");
-        
-        dueAmount = end==='' ?dueAmount+ parseInt(feeData[0].amount[index]):dueAmount+parseInt(feeData[0].amount[index+parseInt(start)]);
-      }
-    }));
-    return { firstName: student.firstName,lastName:student.lastName,middleName:student.middleName, grade: student.grade,dues: dueAmount, phone: student.phone, admno:student.admno,id:student.id };
-  }));
+            dueAmount =
+              end === ""
+                ? dueAmount + parseInt(feeData[0].amount[index])
+                : dueAmount +
+                  parseInt(feeData[0].amount[index + parseInt(start)]);
+          }
+        })
+      );
+      return {
+        firstName: student.firstName,
+        lastName: student.lastName,
+        middleName: student.middleName,
+        grade: student.grade,
+        dues: dueAmount,
+        phone: student.phone,
+        admno: student.admno,
+        id: student.id,
+      };
+    })
+  );
 
-  return res.status(200).json(new ApiResponse(200,dues,'Dues list generated!'));
-
+  return res
+    .status(200)
+    .json(new ApiResponse(200, dues, "Dues list generated!"));
 });
 
+const getCollection = asyncHandler(async (req, res) => {
+  const start = req.query.startDate || "";
+  const end = req.query.endDate || "";
 
-
-const getCollection=asyncHandler(async(req,res)=>{
-  const start=req.query.startDate || '';
-  const end=req.query.endDate || '';
-
-  if(start==='' || end==='')
-  {
-    throw new ApiError(400,'Please provide both start date and end date');
+  if (start === "" || end === "") {
+    throw new ApiError(400, "Please provide both start date and end date");
   }
-  var startDate=new Date(start);
-  var endDate=new Date(end);
-  startDate.setHours(0,0,0,0);
+  var startDate = new Date(start);
+  var endDate = new Date(end);
+  startDate.setHours(0, 0, 0, 0);
   endDate.setHours(23, 59, 59, 999);
-
 
   const todaysTransactions = await Transaction.find({
     createdAt: {
       $gte: startDate,
       $lt: endDate,
     },
-  }).populate('student',"-dues");
-  
-  if(todaysTransactions)
-    return res.status(200).json(new ApiResponse(200,todaysTransactions,'Fetched transactions successfully!'));
-    throw new ApiError(400,'Failed to generate transaction');
+  }).populate("student", "-dues");
+
+  if (todaysTransactions)
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          todaysTransactions,
+          "Fetched transactions successfully!"
+        )
+      );
+  throw new ApiError(400, "Failed to generate transaction");
 });
 
+const getFeeDetails = asyncHandler(async (req, res) => {
+  const admno = req.query.admno;
+  if (admno == null || admno.length == 0)
+    throw new ApiError(404, "Please provide the admission number");
+  const studentExists = await Student.findOne({ admno });
+  if (!studentExists) throw new ApiError(404, "Student not Found");
+  var findFeeDetails = await StuFeeModel.findOne({
+    student: studentExists?._id,
+  }).populate("student");
+  if (!findFeeDetails) throw new ApiError(409, "Something went wrong");
+  const getFees = await Fee.findOne({ grade: studentExists?.grade });
+  if (!getFees) throw new ApiError(400, "Failed to get Fees");
+  const receiptNumber = await Receipt.findOne({
+    _id: "66909fbf061fe77e3121b0a4",
+  });
+  if (!receiptNumber) throw new ApiError(400, "Falied to get receipt number");
+  const data = { findFeeDetails, getFees, receiptNumber };
+  return res
+    .status(200)
+    .json(new ApiResponse(200, data, "Fee Details Fetched Successfully!"));
+});
 
-
-export { Login, AddStudent, getFeeStructure ,updateFee,getStudent,collectFee,calculateFee, getTodaysCollection, deleteStudent, getAllStudent, updateStudent,generateDues, getCollection};
+export {
+  Login,
+  AddStudent,
+  getFeeStructure,
+  updateFee,
+  getStudent,
+  collectFee,
+  calculateFee,
+  getTodaysCollection,
+  deleteStudent,
+  getAllStudent,
+  updateStudent,
+  generateDues,
+  getCollection,
+  getFeeDetails,
+  addBulkStudent
+};

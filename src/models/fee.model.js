@@ -23,38 +23,38 @@ const feeSchema = new Schema({
       "XII",
     ],
   },
-  ProsReg:{
-    type:String,
-    required:true
+  ProsReg: {
+    type: String,
+    required: true,
   },
-  AdmFee:{
-    type:String,
-    required:true,
+  AdmFee: {
+    type: String,
+    required: true,
   },
-  AnnualCharge:{
-    type:String,
-    required:true
+  AnnualCharge: {
+    type: String,
+    required: true,
   },
-  TuitionFee:{
-    type:String,
-    required:true,
+  TuitionFee: {
+    type: String,
+    required: true,
   },
-  LabCharge:{
-    type:String,
-     default:'0',
+  LabCharge: {
+    type: String,
+    default: "0",
   },
-  TotalFee:{
-    type:String,
-    required:true
+  TotalFee: {
+    type: String,
+    required: true,
   },
-  StationaryFee:{
-    type:String,
-    default:'0'
+  StationaryFee: {
+    type: String,
+    default: "0",
   },
-  ExamFee:{
-    type:String,
-    default:'0'
-  }
+  ExamFee: {
+    type: String,
+    default: "0",
+  },
 });
 
 export const Fee = mongoose.model("Fee", feeSchema);
