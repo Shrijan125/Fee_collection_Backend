@@ -36,20 +36,7 @@ const stuFeeSchema = new Schema({
   },
   MonthlyDues: {
     type: ["Boolean"],
-    default: [
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-    ],
+    default: [true, true, true, true, true, true, true, true, true, true],
   },
   description: {
     type: String,

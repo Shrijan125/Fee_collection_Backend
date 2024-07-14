@@ -70,7 +70,6 @@ const studentSchema = new Schema(
     Gender: { type: String, required: true, enum: ["M", "F"] },
 
     bloodGroup: { type: String, required: true },
-
   },
   {
     timestamps: { createdAt: true, updatedAt: false },

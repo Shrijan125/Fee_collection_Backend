@@ -3,6 +3,7 @@ import cors from "cors";
 import apiV1Router from "./routes/route.js";
 const app = express();
 import { ApiError } from "./utils/ApiError.js";
+import cookieParser from "cookie-parser";
 
 const errHandler = (err, req, res, next) => {
   if (err instanceof ApiError) {
@@ -14,8 +15,9 @@ const errHandler = (err, req, res, next) => {
   res.status(500).send("Internal Server Error");
 };
 
-app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }));
+app.use(cookieParser());
 app.use(express.json());
+app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use("/api/v1", apiV1Router);
 app.use(errHandler);

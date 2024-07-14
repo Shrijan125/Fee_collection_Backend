@@ -12,7 +12,36 @@ const transactionSchema = new Schema(
       required: true,
     },
     utrNo: {
-      type: "String",
+      type: String,
+      default: "",
+    },
+    bankName: {
+      type: String,
+      default: "",
+    },
+    lateFine: {
+      type: String,
+      default: "0",
+    },
+    discount: {
+      type: String,
+      default: "0",
+    },
+    dues: {
+      type: String,
+      default: "0",
+    },
+    receiptNo: {
+      type: String,
+      required: true,
+    },
+    months: {
+      type: [String],
+      required: true,
+    },
+    description: {
+      type: String,
+      default: "",
     },
   },
   {

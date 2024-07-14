@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import expressAsyncHandler from "express-async-handler";
 import AdminRoute from "./admin.route.js";
 
 const router = Router();
