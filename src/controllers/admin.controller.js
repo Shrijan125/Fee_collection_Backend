@@ -574,9 +574,9 @@ const generateDues = asyncHandler(async (req, res) => {
   const data = await StuFeeModel.find().populate('student');
   const studentsFiltered = grade ? data.filter(student => student.student.grade === grade) : data;
 
-  const feeData = await Fee.find().select("grade TuitionFee");
+  const feeData = await Fee.find().select("grade TuitionFee LabCharge");
   const feeMap = feeData.reduce((acc, fee) => {
-    acc[fee.grade] = parseInt(fee.TuitionFee);
+    acc[fee.grade] = parseInt(fee.TuitionFee) + parseInt(fee.LabCharge);
     return acc;
   }, {});
 
@@ -586,7 +586,6 @@ const generateDues = asyncHandler(async (req, res) => {
   const dues = studentsFiltered.map(student => {
     const duesUptoIndex = student.MonthlyDues.slice(start, end + 1);
     const dueAmount = duesUptoIndex.reduce((acc, due) => due ? acc + feeMap[student.student.grade] : acc, 0);
-
     return {
       Name: student.student.Name,
       grade: student.student.grade,
