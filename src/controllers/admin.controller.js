@@ -61,7 +61,6 @@ const Login = asyncHandler(async (req, res) => {
     new ApiResponse(
       200, 
       {
-        adminId: adminExists.adminId,
         adminName: adminExists.name,
       },
       "Log In successful!"
@@ -463,7 +462,7 @@ const getTodaysCollection = asyncHandler(async (req, res) => {
       $gte: startOfDay,
       $lt: endOfDay,
     },
-  }).populate("student", "-dues");
+  }).populate("student");
 
   if (todaysTransactions)
     return res
@@ -568,53 +567,39 @@ const updateStudent = asyncHandler(async (req, res) => {
 });
 
 const generateDues = asyncHandler(async (req, res) => {
-  const start = req.query.startDate;
-  var end = req.query.endDate || "";
-  var grade = req.query.grade || "";
+  const { startDate, endDate, grade = "" } = req.query;
 
-  if (!start) throw new ApiError(404, "Starting month is required");
+  if (!startDate || !endDate) throw new ApiError(404, "Starting and Ending month is required");
 
-  const query = grade === "" ? {} : { grade };
-  const data = await Student.find(query);
-  const dues = await Promise.all(
-    data.map(async (student) => {
-      const duesUptoIndex =
-        end === ""
-          ? student.dues.slice(0, parseInt(start) + 1)
-          : student.dues.slice(parseInt(start), parseInt(end) + 1);
-      let dueAmount = 0;
-      await Promise.all(
-        duesUptoIndex.map(async (due, index) => {
-          if (due === true) {
-            const feeData = await Fee.find({ grade: student.grade }).select(
-              "amount"
-            );
+  const data = await StuFeeModel.find().populate('student');
+  const studentsFiltered = grade ? data.filter(student => student.student.grade === grade) : data;
 
-            dueAmount =
-              end === ""
-                ? dueAmount + parseInt(feeData[0].amount[index])
-                : dueAmount +
-                  parseInt(feeData[0].amount[index + parseInt(start)]);
-          }
-        })
-      );
-      return {
-        firstName: student.firstName,
-        lastName: student.lastName,
-        middleName: student.middleName,
-        grade: student.grade,
-        dues: dueAmount,
-        phone: student.phone,
-        admno: student.admno,
-        id: student.id,
-      };
-    })
-  );
+  const feeData = await Fee.find().select("grade TuitionFee");
+  const feeMap = feeData.reduce((acc, fee) => {
+    acc[fee.grade] = parseInt(fee.TuitionFee);
+    return acc;
+  }, {});
 
-  return res
-    .status(200)
-    .json(new ApiResponse(200, dues, "Dues list generated!"));
+  const start = parseInt(startDate);
+  const end = parseInt(endDate);
+
+  const dues = studentsFiltered.map(student => {
+    const duesUptoIndex = student.MonthlyDues.slice(start, end + 1);
+    const dueAmount = duesUptoIndex.reduce((acc, due) => due ? acc + feeMap[student.student.grade] : acc, 0);
+
+    return {
+      Name: student.student.Name,
+      grade: student.student.grade,
+      dues: dueAmount,
+      phone: student.student.phone,
+      admno: student.student.admno,
+      id: student._id,
+    };
+  });
+
+  return res.status(200).json(new ApiResponse(200, dues, "Dues list generated!"));
 });
+
 
 const getCollection = asyncHandler(async (req, res) => {
   const start = req.query.startDate || "";
@@ -633,7 +618,7 @@ const getCollection = asyncHandler(async (req, res) => {
       $gte: startDate,
       $lt: endDate,
     },
-  }).populate("student", "-dues");
+  }).populate("student");
 
   if (todaysTransactions)
     return res
