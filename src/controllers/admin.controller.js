@@ -9,7 +9,7 @@ import { InactiveStudent } from "../models/inactiveStudents.model.js";
 import { StuFeeModel } from "../models/stuFee.model.js";
 import { Receipt } from "../models/receipt.model.js";
 import mongoose from "mongoose";
-import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
 
 const excelDateToJSDate = (serial) => {
   const date = new Date((serial - 25569) * 86400 * 1000);
@@ -52,20 +52,25 @@ const Login = asyncHandler(async (req, res) => {
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid credentials");
   }
-  const token=jwt.sign({_id:adminExists._id},process.env.JWT_SECRET, { expiresIn: process.env.TOKEN_EXPIRY});
+  const token = jwt.sign({ _id: adminExists._id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.TOKEN_EXPIRY,
+  });
   const options = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === "production",
   };
-  return res.status(200).cookie("token",token,options).json(
-    new ApiResponse(
-      200, 
-      {
-        adminName: adminExists.name,
-      },
-      "Log In successful!"
-    )
-  );
+  return res
+    .status(200)
+    .cookie("token", token, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          adminName: adminExists.name,
+        },
+        "Log In successful!"
+      )
+    );
 });
 
 const AddStudent = asyncHandler(async (req, res) => {
@@ -391,26 +396,19 @@ const calculateFee = asyncHandler(async (req, res) => {
     const monthsPassed = currentMonth - parseInt(months);
     const daysPassed = currentDay - 10;
     if (months === "0" || months === "1") {
-      if (currentYear === 2024) fine = 0;
+      if (currentYear === 2024) fine = fine + 0;
       else {
-        if (monthsPassed > 0) {
-          fine = fine + monthsPassed * 50;
-        }
         if (monthsPassed >= 0 && daysPassed > 0) {
           fine += 50;
         }
       }
     } else {
       if (currentYear === 2024) {
-        if (monthsPassed > 0) {
-          fine = fine + monthsPassed * 50;
-        }
         if (monthsPassed >= 0 && daysPassed > 0) {
           fine += 50;
         }
       } else {
-        fine = fine + ((12 - parseInt(months) )* 50) + currentMonth * 50;
-        if (daysPassed > 0) fine = fine + 50;
+        fine = 50;
       }
     }
     totalFee = parseInt(tutFee) + fine;
@@ -420,26 +418,19 @@ const calculateFee = asyncHandler(async (req, res) => {
     for (var i = 0; i < months.length; i++) {
       monthsPassed = currentMonth - parseInt(months[i]);
       if (months[i] === "0" || months[i] === "1") {
-        if (currentYear === 2024) fine = fine+0;
+        if (currentYear === 2024) fine = fine + 0;
         else {
-          if (monthsPassed > 0) {
-            fine = fine + monthsPassed * 50;
-          }
           if (monthsPassed >= 0 && daysPassed > 0) {
             fine += 50;
           }
         }
       } else {
         if (currentYear === 2024) {
-          if (monthsPassed > 0) {
-            fine = fine + monthsPassed * 50;
-          }
           if (monthsPassed >= 0 && daysPassed > 0) {
             fine += 50;
           }
         } else {
-          fine = fine + ((12 - parseInt(months[i]) )* 50) + currentMonth * 50;
-          if (daysPassed > 0) fine = fine + 50;
+          fine += 50;
         }
       }
     }
@@ -569,10 +560,13 @@ const updateStudent = asyncHandler(async (req, res) => {
 const generateDues = asyncHandler(async (req, res) => {
   const { startDate, endDate, grade = "" } = req.query;
 
-  if (!startDate || !endDate) throw new ApiError(404, "Starting and Ending month is required");
+  if (!startDate || !endDate)
+    throw new ApiError(404, "Starting and Ending month is required");
 
-  const data = await StuFeeModel.find().populate('student');
-  const studentsFiltered = grade ? data.filter(student => student.student.grade === grade) : data;
+  const data = await StuFeeModel.find().populate("student");
+  const studentsFiltered = grade
+    ? data.filter((student) => student.student.grade === grade)
+    : data;
 
   const feeData = await Fee.find().select("grade TuitionFee LabCharge");
   const feeMap = feeData.reduce((acc, fee) => {
@@ -583,9 +577,12 @@ const generateDues = asyncHandler(async (req, res) => {
   const start = parseInt(startDate);
   const end = parseInt(endDate);
 
-  const dues = studentsFiltered.map(student => {
+  const dues = studentsFiltered.map((student) => {
     const duesUptoIndex = student.MonthlyDues.slice(start, end + 1);
-    const dueAmount = duesUptoIndex.reduce((acc, due) => due ? acc + feeMap[student.student.grade] : acc, 0);
+    const dueAmount = duesUptoIndex.reduce(
+      (acc, due) => (due ? acc + feeMap[student.student.grade] : acc),
+      0
+    );
     return {
       Name: student.student.Name,
       grade: student.student.grade,
@@ -596,9 +593,10 @@ const generateDues = asyncHandler(async (req, res) => {
     };
   });
 
-  return res.status(200).json(new ApiResponse(200, dues, "Dues list generated!"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, dues, "Dues list generated!"));
 });
-
 
 const getCollection = asyncHandler(async (req, res) => {
   const start = req.query.startDate || "";
@@ -654,10 +652,10 @@ const getFeeDetails = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, data, "Fee Details Fetched Successfully!"));
 });
 
-const logout=asyncHandler(async(req,res)=>{
+const logout = asyncHandler(async (req, res) => {
   const options = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === "production",
   };
   return res
     .status(200)
@@ -681,5 +679,5 @@ export {
   getCollection,
   getFeeDetails,
   addBulkStudent,
-  logout
+  logout,
 };
