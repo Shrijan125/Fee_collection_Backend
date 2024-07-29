@@ -10,6 +10,8 @@ import { StuFeeModel } from "../models/stuFee.model.js";
 import { Receipt } from "../models/receipt.model.js";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
+import { Dress } from "../models/dress.model.js";
+import { DressTransaction } from "../models/dressTransaction.model.js";
 
 const excelDateToJSDate = (serial) => {
   const date = new Date((serial - 25569) * 86400 * 1000);
@@ -37,6 +39,23 @@ const transformKeys = (data) => {
     alternatePhone: item?.AlternatePhone || null,
   }));
 };
+
+// const transformDress=(data)=>{
+//   return data.map((item)=>({
+    // code:item.Code,
+//     name:item.Name,
+//     price:item.Price,
+//     quantity:item.Quantity
+//   }))
+// }
+
+const transformDress=(data)=>{
+  return data.map((item)=>({
+    code:item.Code,
+    price:item.Price,
+    quantity:item.Quantity || 0
+  }))
+}
 
 const Login = asyncHandler(async (req, res) => {
   const { adminId, password } = req.body;
@@ -175,7 +194,7 @@ const AddStudent = asyncHandler(async (req, res) => {
 });
 
 const getFeeStructure = asyncHandler(async (req, res) => {
-  const data = await Fee.find({});
+  const data = await Fee.find({}).select("-_id");
   if (data)
     return res
       .status(200)
@@ -663,6 +682,162 @@ const logout = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "User Logged Out"));
 });
 
+const getDressDetails = asyncHandler(async (req, res) => {
+  const dress = await Dress.find({}).select("-_id -__v");
+  if (!dress) throw new ApiError(400, "Failed to get dress details");
+  return res.status(200).json(new ApiResponse(200, dress, "Dress Details!"));
+});
+
+const updateDressDetails=asyncHandler(async(req,res)=>{
+  const {name,price,quantity}=req.body;
+  const dress=await Dress.findOneAndUpdate({name},{
+    $set:{
+      price,
+      quantity
+    }
+  });
+  if(!dress)
+    throw new ApiError(400,'Failed to update');
+  return res.status(200).json(new ApiResponse(200,{},'Update Successful!'));
+});
+
+// const createBulkDress=asyncHandler(async(req,res)=>{
+//   const data = req.body;
+//   if (!data || data.length === 0) {
+//     throw new ApiError(404, "Can't find any data.");
+//   }
+//   const dataToInsert=transformDress(data);
+//   const insertedData=await Dress.insertMany(dataToInsert);
+//   if(!insertedData)
+//     throw new ApiError(400,'Failed to update data');
+//   return res.status(200).json(new ApiResponse(200,{},'Data entered Successfully!'));
+// });
+
+
+const updateDressDetailsBulk = asyncHandler(async (req, res) => {
+  const data = req.body;
+  if (!data || data.length === 0) {
+    throw new ApiError(404, "Can't find any data.");
+  }
+  const dataToUpdate = transformDress(data);
+
+  const bulkOperations = dataToUpdate.map(item => {
+    const update = { $inc: { quantity: item.quantity } };
+
+    if (item.price !== undefined) {
+      update.$set = { price: item.price };
+    }
+
+    return {
+      updateOne: {
+        filter: { code: item.code },
+        update: update
+      }
+    };
+  });
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const result = await Dress.bulkWrite(bulkOperations, { session });
+
+    if (!result) {
+      throw new ApiError(400, 'Failed to update data');
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json(new ApiResponse(200, {}, 'Data Updated Successfully!'));
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw new ApiError(400, 'Transaction failed', error);
+  }
+});
+
+const calculateDressPayment=asyncHandler(async(req,res)=>{
+  const code=req.query.code;
+  const quantity=req.query.quantity;
+  const parsedQuantity = parseInt(quantity);
+  if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
+    throw new ApiError(400, 'Invalid quantity provided');
+  }
+  if(!code || !quantity)
+    throw new ApiError(400,'Please provide the required fields');
+  const dressDetails=await Dress.findOne({code});
+  if(!dressDetails) 
+    throw new ApiError(404,'Dress Not Found');
+  const amount=parsedQuantity*dressDetails.price;
+  return res.status(200).json(new ApiResponse(200,amount,'Amount calculated Successfully'));
+});
+
+const getDressReceipt = asyncHandler(async (req, res) => {
+  const receiptNo = await Receipt.findById('66a39f4ebafe090ed82ee3aa');
+  if (!receiptNo) {
+    throw new ApiError(404, 'Receipt No. not found');
+  }
+  return res.status(200).json(new ApiResponse(200, receiptNo, 'Receipt No. fetched successfully!'));
+});
+
+
+
+const collectDressPayment = asyncHandler(async (req, res) => {
+  const { code, quantity, phone, name, receiptNo, amount } = req.body;
+  if (!code || !quantity || !phone || !name || !receiptNo || !amount)
+    throw new ApiError(400, 'Please provide the mandatory fields');
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const updateStock = await Dress.findOneAndUpdate(
+      { code },
+      { $inc: { quantity: -parseInt(quantity) } },
+      { new: true, session }
+    );
+
+    if (!updateStock)
+      throw new ApiError(404, 'Failed to update!');
+
+    const incCount = await Receipt.findByIdAndUpdate(
+      { _id: "66a39f4ebafe090ed82ee3aa" },
+      { $inc: { count: 1 } },
+      { new: true, session }
+    );
+
+    if (!incCount)
+      throw new ApiError(400, 'Failed to increment receipt number');
+
+    const createTransaction = await DressTransaction.create(
+      [{
+        amount,
+        dress: updateStock?._id,
+        name,
+        phone,
+        quantity,
+        receiptNo,
+      }],
+      { session }
+    );
+
+    if (!createTransaction)
+      throw new ApiError(400, 'Failed to create Transaction');
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json(new ApiResponse(200, {}, 'Transaction Successful!'));
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+});
+
+
+
 export {
   Login,
   AddStudent,
@@ -680,4 +855,10 @@ export {
   getFeeDetails,
   addBulkStudent,
   logout,
+  getDressDetails,
+  updateDressDetails,
+  updateDressDetailsBulk,
+  collectDressPayment,
+  calculateDressPayment,
+  getDressReceipt
 };

@@ -16,6 +16,9 @@ import {
   getFeeDetails,
   addBulkStudent,
   logout,
+  getDressDetails,
+  updateDressDetails,
+  updateDressDetailsBulk,
 } from "../controllers/admin.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -36,5 +39,8 @@ router.route("/generateDues").get(verifyJWT, generateDues);
 router.route("/generateCollection").get(verifyJWT, getCollection);
 router.route("/getFeeDetails").get(verifyJWT, getFeeDetails);
 router.route("/addBulkStudent").post(verifyJWT, addBulkStudent);
+router.route("/getDressDetails").get(verifyJWT, getDressDetails);
+router.route("/updateDressDetails").put(verifyJWT,updateDressDetails);
+router.route("/updateDressBulk").post(verifyJWT,updateDressDetailsBulk);
 router.route("/logout").post(verifyJWT, logout);
 export default router;
