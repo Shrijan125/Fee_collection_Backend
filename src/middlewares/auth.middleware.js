@@ -7,7 +7,6 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
   try {
     const token = req.cookies?.token;
     if (!token) {
-
       throw new ApiError(401, "Unauthorized request");
     }
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
@@ -15,7 +14,6 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
       "-password -adminId"
     );
     if (!findAdmin) {
-
       throw new ApiError(401, "Invalid Access Token");
     }
     next();

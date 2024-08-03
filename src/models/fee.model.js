@@ -5,7 +5,6 @@ const feeSchema = new Schema({
     type: String,
     required: true,
     enum: [
-      "Pre-Nur",
       "Nur",
       "KG-I",
       "KG-II",
@@ -19,8 +18,6 @@ const feeSchema = new Schema({
       "VIII",
       "IX",
       "X",
-      "XI",
-      "XII",
     ],
   },
   ProsReg: {

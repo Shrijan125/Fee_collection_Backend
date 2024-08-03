@@ -1,31 +1,31 @@
 import mongoose, { Schema } from "mongoose";
 
-const stuFeeSchema = new Schema(
+const instuFeeSchema = new Schema(
   {
     student: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Student",
+      ref: "InactiveStudent",
       required: true,
     },
     annDevChrg: {
       type: Boolean,
-      default: false,
+      required: true,
     },
     examFee1: {
       type: Boolean,
-      default: false,
+      required: true,
     },
     examFee2: {
       type: Boolean,
-      default: false,
+      required: true,
     },
     statFee1: {
       type: Boolean,
-      default: false,
+      required: true,
     },
     statFee2: {
       type: Boolean,
-      default: false,
+      required: true,
     },
     discount: {
       type: String,
@@ -44,9 +44,7 @@ const stuFeeSchema = new Schema(
       default: "",
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-export const StuFeeModel = mongoose.model("StuFeeModel", stuFeeSchema);
+export const InAStuFeeModel = mongoose.model("InAStuFeeModel", instuFeeSchema);

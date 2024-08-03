@@ -4,7 +4,6 @@ const studentSchema = new Schema(
   {
     admno: {
       type: String,
-      required: true,
       unique: true,
     },
     Name: {
@@ -13,13 +12,11 @@ const studentSchema = new Schema(
     },
     DOB: {
       type: Date,
-      required: true,
     },
     grade: {
       type: String,
       required: true,
       enum: [
-        "Pre-Nur",
         "Nur",
         "KG-I",
         "KG-II",
@@ -33,13 +30,10 @@ const studentSchema = new Schema(
         "VIII",
         "IX",
         "X",
-        "XI",
-        "XII",
       ],
-    },
+    }, //eliminated 11th and 12th class
     section: {
       type: String,
-      required: true,
     },
     profile: {
       type: String,
@@ -54,22 +48,24 @@ const studentSchema = new Schema(
     },
     phone: {
       type: String,
-      required: true,
       minlength: 10,
+      maxlength: 10,
+      required: true,
     },
     alternatePhone: {
       type: String,
       minlength: 10,
+      maxlength: 10,
     },
     hostelFacility: { type: Boolean, default: false },
     TransportFacility: { type: Boolean, default: false },
     feeWaiver: { type: Boolean, default: false },
 
-    Aadhar: { type: String, required: true },
+    Aadhar: { type: String }, //eliminated required
     Address: { type: String, required: true },
-    Gender: { type: String, required: true, enum: ["M", "F"] },
+    Gender: { type: String, enum: ["M", "F"], required: true },
 
-    bloodGroup: { type: String, required: true },
+    bloodGroup: { type: String }, //eliminated required
   },
   {
     timestamps: { createdAt: true, updatedAt: false },

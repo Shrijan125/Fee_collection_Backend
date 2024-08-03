@@ -21,6 +21,11 @@ import {
   updateDressDetailsBulk,
 } from "../controllers/admin.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import {
+  createExam,
+  examDetails,
+  uploadMarks,
+} from "../controllers/Result/result.controller.js";
 
 const router = Router();
 
@@ -40,7 +45,10 @@ router.route("/generateCollection").get(verifyJWT, getCollection);
 router.route("/getFeeDetails").get(verifyJWT, getFeeDetails);
 router.route("/addBulkStudent").post(verifyJWT, addBulkStudent);
 router.route("/getDressDetails").get(verifyJWT, getDressDetails);
-router.route("/updateDressDetails").put(verifyJWT,updateDressDetails);
-router.route("/updateDressBulk").post(verifyJWT,updateDressDetailsBulk);
-router.route("/logout").post(verifyJWT, logout);
+router.route("/updateDressDetails").put(verifyJWT, updateDressDetails);
+router.route("/updateDressBulk").post(verifyJWT, updateDressDetailsBulk);
+router.route("/createExam").post(verifyJWT, createExam);
+router.route("/getExamDetails").get(verifyJWT, examDetails);
+router.route("/uploadMarks").post(verifyJWT, uploadMarks);
+router.route("/logout").post(logout);
 export default router;

@@ -16,9 +16,9 @@ const errHandler = (err, req, res, next) => {
 };
 
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }));
-app.use(express.urlencoded({ extended: true, limit: "16kb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use("/api/v1", apiV1Router);
 app.use(errHandler);
 

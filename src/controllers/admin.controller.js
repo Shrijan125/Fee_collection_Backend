@@ -12,6 +12,7 @@ import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import { Dress } from "../models/dress.model.js";
 import { DressTransaction } from "../models/dressTransaction.model.js";
+import { InAStuFeeModel } from "../models/inactvFee.model.js";
 
 const excelDateToJSDate = (serial) => {
   const date = new Date((serial - 25569) * 86400 * 1000);
@@ -20,42 +21,51 @@ const excelDateToJSDate = (serial) => {
 };
 
 const transformKeys = (data) => {
-  return data.map((item) => ({
-    Name: item?.Name,
-    admno: item?.Admno,
-    DOB: new Date(excelDateToJSDate(item.DOB)),
-    section: item?.Section,
-    grade: item?.Class,
-    bloodGroup: item["Blood Group"],
-    phone: item["Phone Number"],
-    fathersName: item["Father's Name"],
-    mothersName: item["Mother's Name"],
-    hostelFacility: item["Hostel Facility"] || false,
-    TransportFacility: item["Transport Facility"] || false,
-    feeWaiver: item["Fee Waiver"] || false,
-    Aadhar: item?.Aadhar,
-    Address: item?.Address,
-    Gender: item?.Gender,
-    alternatePhone: item?.AlternatePhone || null,
-  }));
+  return data.map((item) => {
+    return {
+      Name: item?.Name,
+      admno:
+        item?.Class === "Nur" ||
+        item?.Class === "KG-I" ||
+        item?.Class === "KG-II"
+          ? item?.Admno + "JUN"
+          : item?.Admno,
+      DOB: item.DOB
+        ? new Date(excelDateToJSDate(item.DOB))
+        : new Date("1900-01-01"),
+      section: item?.Section,
+      grade: item?.Class,
+      bloodGroup: item["Blood Group"],
+      phone: item["Phone Number"],
+      fathersName: item["Father's Name"],
+      mothersName: item["Mother's Name"],
+      hostelFacility: item["Hostel Facility"] || false,
+      TransportFacility: item["Transport Facility"] || false,
+      feeWaiver: item["Fee Waiver"] || false,
+      Aadhar: item?.Aadhar,
+      Address: item?.Address,
+      Gender: item?.Gender,
+      alternatePhone: item?.AlternatePhone || null,
+    };
+  });
 };
 
 // const transformDress=(data)=>{
 //   return data.map((item)=>({
-    // code:item.Code,
+// code:item.Code,
 //     name:item.Name,
 //     price:item.Price,
 //     quantity:item.Quantity
 //   }))
 // }
 
-const transformDress=(data)=>{
-  return data.map((item)=>({
-    code:item.Code,
-    price:item.Price,
-    quantity:item.Quantity || 0
-  }))
-}
+const transformDress = (data) => {
+  return data.map((item) => ({
+    code: item.Code,
+    price: item.Price,
+    quantity: item.Quantity || 0,
+  }));
+};
 
 const Login = asyncHandler(async (req, res) => {
   const { adminId, password } = req.body;
@@ -105,13 +115,13 @@ const AddStudent = asyncHandler(async (req, res) => {
     hostelFacility,
     TransportFacility,
     feeWaiver,
-    Aadhar,
     Address,
     Gender,
     bloodGroup,
     alternatePhone,
   } = req.body;
 
+  var { Aadhar } = req.body;
   if (
     !String(bloodGroup).trim() ||
     !String(Name).trim() ||
@@ -121,7 +131,6 @@ const AddStudent = asyncHandler(async (req, res) => {
     !String(DOB).trim() ||
     !String(fathersName).trim() ||
     !String(mothersName).trim() ||
-    !String(Aadhar).trim() ||
     !String(Address).trim() ||
     !String(Gender).trim() ||
     !String(section).trim()
@@ -129,18 +138,25 @@ const AddStudent = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Please fill the required fields");
   }
 
+  if (!Aadhar) Aadhar = "";
+
   const session = await mongoose.startSession();
   session.startTransaction();
-
+  const Admno =
+    grade === "Nur" || grade === "KG-I" || grade === "KG-II"
+      ? admno.trim() + "JUN"
+      : admno.trim();
   try {
-    const studentExists = await Student.findOne({ admno }).session(session);
+    const studentExists = await Student.findOne({ admno: Admno }).session(
+      session
+    );
     if (studentExists) {
       throw new ApiError(409, "Student with that admno already exists");
     }
 
-    const inactiveStudent = await InactiveStudent.findOne({ admno }).session(
-      session
-    );
+    const inactiveStudent = await InactiveStudent.findOne({
+      admno: Admno,
+    }).session(session);
     if (inactiveStudent) {
       throw new ApiError(409, "Student with that admno already exists");
     }
@@ -149,7 +165,7 @@ const AddStudent = asyncHandler(async (req, res) => {
       [
         {
           Name,
-          admno,
+          admno: Admno,
           DOB,
           section,
           grade,
@@ -249,7 +265,7 @@ const updateFee = asyncHandler(async (req, res) => {
 
 const getStudent = asyncHandler(async (req, res) => {
   const admno = req.query.admno;
-  if (admno == null || admno.length == 0)
+  if (admno === null || admno.length === 0)
     throw new ApiError(404, "Please provide the admission number");
   const studentExists = await Student.findOne({ admno });
   if (studentExists)
@@ -417,14 +433,18 @@ const calculateFee = asyncHandler(async (req, res) => {
     if (months === "0" || months === "1") {
       if (currentYear === 2024) fine = fine + 0;
       else {
-        if (monthsPassed >= 0 && daysPassed > 0) {
+        if (monthsPassed > 0) {
           fine += 50;
+        } else if (monthsPassed === 0 && daysPassed > 0) {
+          fine = 50;
         }
       }
     } else {
       if (currentYear === 2024) {
-        if (monthsPassed >= 0 && daysPassed > 0) {
+        if (monthsPassed > 0) {
           fine += 50;
+        } else if (monthsPassed === 0 && daysPassed > 0) {
+          fine = 50;
         }
       } else {
         fine = 50;
@@ -439,13 +459,17 @@ const calculateFee = asyncHandler(async (req, res) => {
       if (months[i] === "0" || months[i] === "1") {
         if (currentYear === 2024) fine = fine + 0;
         else {
-          if (monthsPassed >= 0 && daysPassed > 0) {
+          if (monthsPassed > 0) {
+            fine += 50;
+          } else if (monthsPassed === 0 && daysPassed > 0) {
             fine += 50;
           }
         }
       } else {
         if (currentYear === 2024) {
-          if (monthsPassed >= 0 && daysPassed > 0) {
+          if (monthsPassed > 0) {
+            fine += 50;
+          } else if (monthsPassed === 0 && daysPassed > 0) {
             fine += 50;
           }
         } else {
@@ -489,39 +513,77 @@ const getTodaysCollection = asyncHandler(async (req, res) => {
 
 const deleteStudent = asyncHandler(async (req, res) => {
   const { admno } = req.body;
-  if (!admno) throw new ApiError(400, "Admission Number is requried");
-  const studentExists = await Student.findOne({ admno });
-  if (!studentExists) throw new ApiError(404, "Student Not Found");
+  if (!admno) throw new ApiError(400, "Admission Number is required");
 
-  const inactivateStudent = await InactiveStudent.create({
-    admno: studentExists.admno,
-    firstName: studentExists.firstName,
-    middleName: studentExists.middleName,
-    lastName: studentExists.lastName,
-    grade: studentExists.grade,
-    phone: studentExists.phone,
-    alternatePhone: studentExists.alternatePhone,
-  });
-  if (!inactivateStudent)
-    throw new ApiError(409, "Failed to inactivateStudent!");
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const studentExists = await Student.findOne({ admno }).session(session);
+    if (!studentExists) throw new ApiError(404, "Student Not Found");
 
-  const deleteStudent = await Student.findByIdAndDelete(studentExists._id);
-  if (!deleteStudent) throw new ApiError(400, "Failed to delete Student");
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        inactivateStudent,
-        "Student Inactivated Successfully"
-      )
-    );
+    const inactiveData = {
+      admno: studentExists.admno,
+      Name: studentExists.Name,
+      DOB: studentExists.DOB,
+      grade: studentExists.grade,
+      section: studentExists.section,
+      fathersName: studentExists.fathersName,
+      mothersName: studentExists.mothersName,
+      phone: studentExists.phone,
+      hostelFacility: studentExists.hostelFacility,
+      TransportFacility: studentExists.TransportFacility,
+      feeWaiver: studentExists.feeWaiver,
+      Aadhar: studentExists.Aadhar,
+      Address: studentExists.Address,
+      Gender: studentExists.Gender,
+      bloodGroup: studentExists.bloodGroup,
+      doa: studentExists.createdAt,
+      alternatePhone: studentExists.alternatePhone,
+    };
+
+    const inactivateStudent = await InactiveStudent.create([inactiveData], { session });
+    if (!inactivateStudent) throw new ApiError(409, "Failed to inactivate student!");
+
+    const feeDetails = await StuFeeModel.findOne({ student: studentExists._id }).session(session);
+    if (!feeDetails) throw new ApiError(404, "Fee details not found");
+
+    const inacFee = {
+      student: inactivateStudent[0]._id,
+      annDevChrg: feeDetails.annDevChrg,
+      examFee1: feeDetails.examFee1,
+      examFee2: feeDetails.examFee2,
+      statFee1: feeDetails.statFee1,
+      statFee2: feeDetails.statFee2,
+      discount: feeDetails.discount,
+      dues: feeDetails.dues,
+      MonthlyDues: feeDetails.MonthlyDues,
+      description: feeDetails.description,
+    };
+
+    const inactivateStudentFee = await InAStuFeeModel.create([inacFee], { session });
+    if (!inactivateStudentFee) throw new ApiError(400, "Failed to create fee model!");
+
+    const deleteStudent = await Student.findByIdAndDelete(studentExists._id).session(session);
+    if (!deleteStudent) throw new ApiError(400, "Failed to delete student");
+
+    const deleteFee = await StuFeeModel.findByIdAndDelete(feeDetails._id).session(session);
+    if (!deleteFee) throw new ApiError(400, "Failed to delete old fee model");
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json(new ApiResponse(200, {}, "Student inactivated successfully"));
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw new ApiError(500, `Transaction failed!`);
+  }
 });
 
 const getAllStudent = asyncHandler(async (req, res) => {
   const admno = req.query.admno;
   var present;
-  if (admno == null || admno.length == 0)
+  if (admno === null || admno.length === 0)
     throw new ApiError(404, "Please provide the admission number");
   var studentExists = await Student.findOne({ admno });
   present = true;
@@ -543,29 +605,59 @@ const getAllStudent = asyncHandler(async (req, res) => {
 
 const updateStudent = asyncHandler(async (req, res) => {
   const {
-    firstName,
-    admno,
-    lastName,
-    middleName,
+    name,
     grade,
+    admno,
+    fathersName,
+    mothersName,
     phone,
     alternatePhone,
+    address,
+    bloodGroup,
+    gender,
+    hostel,
+    transport,
+    feeWaiver,
+    section,
+    DOB,
   } = req.body;
-  if (!firstName || !admno || !grade || !phone) {
+  var { aadhar } = req.body;
+  if (
+    !admno ||
+    !name ||
+    !grade ||
+    !phone ||
+    !fathersName ||
+    !mothersName ||
+    !address ||
+    !bloodGroup ||
+    !gender ||
+    !DOB ||
+    !section
+  ) {
     throw new ApiError(404, "Please fill the required fields");
   }
+  if (!aadhar) aadhar = "";
   const studentExists = await Student.findOne({ admno });
   if (!studentExists) {
     throw new ApiError(409, "Student with that admno does not exists");
   }
   const updateObj = {
-    firstName,
+    Name: name,
     admno,
-    lastName,
-    middleName,
     grade,
     phone,
     alternatePhone,
+    section,
+    fathersName,
+    mothersName,
+    hostelFacility: hostel,
+    TransportFacility: transport,
+    feeWaiver: feeWaiver,
+    Aadhar: aadhar,
+    Address: address,
+    Gender: gender,
+    bloodGroup: bloodGroup,
   };
   const updatedStudent = await Student.findByIdAndUpdate(
     studentExists._id,
@@ -573,7 +665,11 @@ const updateStudent = asyncHandler(async (req, res) => {
     { new: true }
   );
   if (!updatedStudent) throw new ApiError(400, "Failed to update Student");
-  return res.status(200).json(updatedStudent);
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, updatedStudent, "Student updated Successfully!")
+    );
 });
 
 const generateDues = asyncHandler(async (req, res) => {
@@ -650,8 +746,8 @@ const getCollection = asyncHandler(async (req, res) => {
 });
 
 const getFeeDetails = asyncHandler(async (req, res) => {
-  const admno = req.query.admno;
-  if (admno == null || admno.length == 0)
+  const admno = req?.query?.admno.trim();
+  if (admno === null || admno.length === 0)
     throw new ApiError(404, "Please provide the admission number");
   const studentExists = await Student.findOne({ admno });
   if (!studentExists) throw new ApiError(404, "Student not Found");
@@ -688,17 +784,19 @@ const getDressDetails = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, dress, "Dress Details!"));
 });
 
-const updateDressDetails=asyncHandler(async(req,res)=>{
-  const {name,price,quantity}=req.body;
-  const dress=await Dress.findOneAndUpdate({name},{
-    $set:{
-      price,
-      quantity
+const updateDressDetails = asyncHandler(async (req, res) => {
+  const { name, price, quantity } = req.body;
+  const dress = await Dress.findOneAndUpdate(
+    { name },
+    {
+      $set: {
+        price,
+        quantity,
+      },
     }
-  });
-  if(!dress)
-    throw new ApiError(400,'Failed to update');
-  return res.status(200).json(new ApiResponse(200,{},'Update Successful!'));
+  );
+  if (!dress) throw new ApiError(400, "Failed to update");
+  return res.status(200).json(new ApiResponse(200, {}, "Update Successful!"));
 });
 
 // const createBulkDress=asyncHandler(async(req,res)=>{
@@ -713,7 +811,6 @@ const updateDressDetails=asyncHandler(async(req,res)=>{
 //   return res.status(200).json(new ApiResponse(200,{},'Data entered Successfully!'));
 // });
 
-
 const updateDressDetailsBulk = asyncHandler(async (req, res) => {
   const data = req.body;
   if (!data || data.length === 0) {
@@ -721,7 +818,7 @@ const updateDressDetailsBulk = asyncHandler(async (req, res) => {
   }
   const dataToUpdate = transformDress(data);
 
-  const bulkOperations = dataToUpdate.map(item => {
+  const bulkOperations = dataToUpdate.map((item) => {
     const update = { $inc: { quantity: item.quantity } };
 
     if (item.price !== undefined) {
@@ -731,8 +828,8 @@ const updateDressDetailsBulk = asyncHandler(async (req, res) => {
     return {
       updateOne: {
         filter: { code: item.code },
-        update: update
-      }
+        update: update,
+      },
     };
   });
 
@@ -743,50 +840,53 @@ const updateDressDetailsBulk = asyncHandler(async (req, res) => {
     const result = await Dress.bulkWrite(bulkOperations, { session });
 
     if (!result) {
-      throw new ApiError(400, 'Failed to update data');
+      throw new ApiError(400, "Failed to update data");
     }
 
     await session.commitTransaction();
     session.endSession();
 
-    return res.status(200).json(new ApiResponse(200, {}, 'Data Updated Successfully!'));
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {}, "Data Updated Successfully!"));
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    throw new ApiError(400, 'Transaction failed', error);
+    throw new ApiError(400, "Transaction failed", error);
   }
 });
 
-const calculateDressPayment=asyncHandler(async(req,res)=>{
-  const code=req.query.code;
-  const quantity=req.query.quantity;
+const calculateDressPayment = asyncHandler(async (req, res) => {
+  const code = req.query.code;
+  const quantity = req.query.quantity;
   const parsedQuantity = parseInt(quantity);
   if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
-    throw new ApiError(400, 'Invalid quantity provided');
+    throw new ApiError(400, "Invalid quantity provided");
   }
-  if(!code || !quantity)
-    throw new ApiError(400,'Please provide the required fields');
-  const dressDetails=await Dress.findOne({code});
-  if(!dressDetails) 
-    throw new ApiError(404,'Dress Not Found');
-  const amount=parsedQuantity*dressDetails.price;
-  return res.status(200).json(new ApiResponse(200,amount,'Amount calculated Successfully'));
+  if (!code || !quantity)
+    throw new ApiError(400, "Please provide the required fields");
+  const dressDetails = await Dress.findOne({ code });
+  if (!dressDetails) throw new ApiError(404, "Dress Not Found");
+  const amount = parsedQuantity * dressDetails.price;
+  return res
+    .status(200)
+    .json(new ApiResponse(200, amount, "Amount calculated Successfully"));
 });
 
 const getDressReceipt = asyncHandler(async (req, res) => {
-  const receiptNo = await Receipt.findById('66a39f4ebafe090ed82ee3aa');
+  const receiptNo = await Receipt.findById("66a39f4ebafe090ed82ee3aa");
   if (!receiptNo) {
-    throw new ApiError(404, 'Receipt No. not found');
+    throw new ApiError(404, "Receipt No. not found");
   }
-  return res.status(200).json(new ApiResponse(200, receiptNo, 'Receipt No. fetched successfully!'));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, receiptNo, "Receipt No. fetched successfully!"));
 });
-
-
 
 const collectDressPayment = asyncHandler(async (req, res) => {
   const { code, quantity, phone, name, receiptNo, amount } = req.body;
   if (!code || !quantity || !phone || !name || !receiptNo || !amount)
-    throw new ApiError(400, 'Please provide the mandatory fields');
+    throw new ApiError(400, "Please provide the mandatory fields");
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -798,8 +898,7 @@ const collectDressPayment = asyncHandler(async (req, res) => {
       { new: true, session }
     );
 
-    if (!updateStock)
-      throw new ApiError(404, 'Failed to update!');
+    if (!updateStock) throw new ApiError(404, "Failed to update!");
 
     const incCount = await Receipt.findByIdAndUpdate(
       { _id: "66a39f4ebafe090ed82ee3aa" },
@@ -808,35 +907,37 @@ const collectDressPayment = asyncHandler(async (req, res) => {
     );
 
     if (!incCount)
-      throw new ApiError(400, 'Failed to increment receipt number');
+      throw new ApiError(400, "Failed to increment receipt number");
 
     const createTransaction = await DressTransaction.create(
-      [{
-        amount,
-        dress: updateStock?._id,
-        name,
-        phone,
-        quantity,
-        receiptNo,
-      }],
+      [
+        {
+          amount,
+          dress: updateStock?._id,
+          name,
+          phone,
+          quantity,
+          receiptNo,
+        },
+      ],
       { session }
     );
 
     if (!createTransaction)
-      throw new ApiError(400, 'Failed to create Transaction');
+      throw new ApiError(400, "Failed to create Transaction");
 
     await session.commitTransaction();
     session.endSession();
 
-    return res.status(200).json(new ApiResponse(200, {}, 'Transaction Successful!'));
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {}, "Transaction Successful!"));
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
     throw error;
   }
 });
-
-
 
 export {
   Login,
@@ -860,5 +961,5 @@ export {
   updateDressDetailsBulk,
   collectDressPayment,
   calculateDressPayment,
-  getDressReceipt
+  getDressReceipt,
 };
